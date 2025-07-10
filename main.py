@@ -51,10 +51,10 @@ def guardar_nuevo_usuario(audio_bytes, nombre):
         wf.setsampwidth(2)
         wf.setframerate(16000)
         wf.writeframes(audio_bytes)
-    ruta_txt = os.path.join(carpeta, f"{nombre}.txt")
-    if not os.path.exists(ruta_txt):
-        with open(ruta_txt, "w", encoding="utf-8") as f:
-            f.write("# Frases del usuario\n")
+    #ruta_txt = os.path.join(carpeta, f"{nombre}.txt")
+   # if not os.path.exists(ruta_txt):
+     #   with open(ruta_txt, "w", encoding="utf-8") as f:
+      #      f.write("# Frases del usuario\n")
     return ruta_audio
 
 # Verifica si sesión sigue activa
@@ -116,7 +116,10 @@ class JarvisLayout(BoxLayout):
 
             wav, _ = librosa.load(tmp_audio.name, sr=16000)
             embed = encoder.embed_utterance(wav)
-            np.save(f"perfiles/{nombre}.npy", embed)
+            os.makedirs("usuarios", exist_ok=True)
+            np.save(f"usuarios/{nombre}.npy", embed)
+
+            
 
             perfil_activo["usuario"] = nombre
             perfil_activo["inicio"] = datetime.now()
