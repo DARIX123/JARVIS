@@ -1,0 +1,18 @@
+<JarvisLayout>:
+    orientation: "vertical"
+    padding: 20
+    spacing: 10
+
+    Button:
+        text: " Hablar con JARVIS"
+        size_hint_y: None
+        height: "50dp"
+        on_release: root.hablar_con_jarvis()
+
+    Label:
+        id: output
+        text: "Bienvenido a tu JARVIS"
+        font_size: 18
+        halign: "left"
+        valign: "top"
+        text_size: self.size
