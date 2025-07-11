@@ -6,6 +6,8 @@ from encoder import inference as encoder
 from pathlib import Path
 import soundfile as sf
 
+UMBRAL_SIMILITUD = 0.75  # puedes ajustar este valor
+
 # Inicializar Flask
 app = Flask(__name__)
 
@@ -13,7 +15,6 @@ modelo_path = os.path.join(os.getcwd(), "encoder_model", "encoder.pt")
 encoder.load_model(modelo_path)
 
 perfiles_dir = os.path.join(os.getcwd(), "usuarios")
-
 
 # Función para preprocesar el audio y obtener el embedding
 def obtener_embedding(audio_path):
@@ -35,6 +36,7 @@ def reconocer_voz():
         max_similitud = 0.0
         usuario_detectado = "desconocido"
 
+        # Este for debe estar dentro del try
         for archivo in os.listdir(perfiles_dir):
             if archivo.endswith(".npy"):
                 usuario = archivo.replace(".npy", "")
@@ -49,6 +51,9 @@ def reconocer_voz():
                 if max_sim > max_similitud:
                     max_similitud = max_sim
                     usuario_detectado = usuario
+
+        if max_similitud < UMBRAL_SIMILITUD:
+            usuario_detectado = "desconocido"
 
         print(f"Usuario detectado: {usuario_detectado} (Similitud: {float(max_similitud):.2f})")
         return jsonify({"usuario": usuario_detectado, "similitud": float(max_similitud)})
