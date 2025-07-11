@@ -315,5 +315,5 @@ class JarvisApp(App):
     def build(self):
         return JarvisLayout()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     JarvisApp().run()

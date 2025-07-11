@@ -9,11 +9,11 @@ import soundfile as sf
 # Inicializar Flask
 app = Flask(__name__)
 
-# Cargar el modelo encoder
-encoder.load_model("C:/Users/PC RAPTOR/Desktop/JARVIS/encoder_model/encoder.pt")
+modelo_path = os.path.join(os.getcwd(), "encoder_model", "encoder.pt")
+encoder.load_model(modelo_path)
 
-# Ruta de los perfiles de voz
-perfiles_dir = "C:/Users/PC RAPTOR/Desktop/JARVIS/usuarios"  # Asegúrate de que esta ruta sea correcta y contenga .npy
+perfiles_dir = os.path.join(os.getcwd(), "usuarios")
+
 
 # Función para preprocesar el audio y obtener el embedding
 def obtener_embedding(audio_path):

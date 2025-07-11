@@ -1,18 +1,40 @@
 <JarvisLayout>:
     orientation: "vertical"
     padding: 20
-    spacing: 10
+    spacing: 20
+    canvas.before:
+        Color:
+            rgba: 0.1, 0.1, 0.15, 1  # Fondo azul oscuro
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    Label:
+        text: "🔷 Bienvenido a JARVIS"
+        font_size: 28
+        bold: True
+        color: 0.3, 0.8, 1, 1  # Azul brillante
+        size_hint_y: None
+        height: "40dp"
+        halign: "center"
+        valign: "middle"
+        text_size: self.size
 
     Button:
-        text: " Hablar con JARVIS"
+        text: "🎙️ Hablar con JARVIS"
         size_hint_y: None
         height: "50dp"
+        font_size: 20
+        background_color: 0, 0.5, 1, 1
+        color: 1, 1, 1, 1
         on_release: root.hablar_con_jarvis()
 
     Label:
         id: output
-        text: "Bienvenido a tu JARVIS"
+        text: "Esperando comandos..."
         font_size: 18
+        color: 1, 1, 1, 1
         halign: "left"
         valign: "top"
         text_size: self.size
+
