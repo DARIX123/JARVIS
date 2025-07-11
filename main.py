@@ -112,6 +112,10 @@ class JarvisLayout(BoxLayout):
 
         try:
             nombre = r.recognize_google(nombre_audio, language="es-MX").lower().strip()
+            for frase in ["hola", "me llamo", "soy", "mi nombre es", "el nombre es"]:
+                if frase in nombre:
+                    nombre = nombre.replace(frase, "").strip()
+            nombre = nombre.split()[0]
             self.ids.output.text += f"\nTú: {nombre}"
 
             wav, _ = librosa.load(tmp_audio.name, sr=16000)
