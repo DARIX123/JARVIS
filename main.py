@@ -20,9 +20,9 @@ import time
 import numpy as np
 
 global estado_actual
-# ... (todas tus importaciones, igual que ya tienes)
 
-# Variables globales
+
+
 perfil_activo = {"usuario": None, "inicio": None}
 microfono_activo = False
 should_record = False
@@ -205,14 +205,19 @@ class JarvisLayout(BoxLayout):
             self.reproducir_audio(mensaje)
             return
         
-        if "qué canción" in comando or "qué música" in comando or "cuál canción" in comando:
+        if any(frase in comando for frase in [
+            "qué canción", "qué música", "cuál canción",
+            "qué canción es esta", "cómo se llama esta canción",
+            "cuál era la canción", "qué puse", "qué canción puse"
+        ]):
+
             if estado_actual["ultima_cancion"]:
                 respuesta = f"La canción actual es: {estado_actual['ultima_cancion']}."
             else:
                 respuesta = "No recuerdo que hayas puesto alguna canción."
-                self.ids.output.text += f"\nJARVIS: {respuesta}"
-                self.reproducir_audio(respuesta)
-                return
+            self.ids.output.text += f"\nJARVIS: {respuesta}"
+            self.reproducir_audio(respuesta)
+            return
 
         
         if "qué te dije hace rato" in comando or "qué te conté" in comando or "qué te dije" in comando:
@@ -239,6 +244,8 @@ class JarvisLayout(BoxLayout):
             respuesta = requests.post("http://127.0.0.1:5000/comando", json={"mensaje": comando,
                                                                              "usuario": perfil_activo["usuario"]})
             texto_respuesta = respuesta.json()["respuesta"]
+            print("[📥 TEXTO RECIBIDO DEL SERVIDOR]:", texto_respuesta)
+
             conversacion.append({
                 "rol": "jarvis",
                 "contenido": texto_respuesta,
@@ -246,8 +253,8 @@ class JarvisLayout(BoxLayout):
             })
 
             try:
+                print("Intentando decodificar:", texto_respuesta)
                 data = json.loads(texto_respuesta)
-                print("DATA RECIBIDA", data)
                 if isinstance(data, dict) and data.get("accion") == "reproducir_musica":
                     titulo = data.get("titulo", "")
                     artista = data.get("artista", "")
@@ -265,6 +272,7 @@ class JarvisLayout(BoxLayout):
                         except:
                             texto_respuesta = "No pude encontrar la canción."
             except json.JSONDecodeError:
+                print("No es un JSON válido. El texto fue:", texto_respuesta)
                 pass
 
             texto_lower = texto_respuesta.lower()
