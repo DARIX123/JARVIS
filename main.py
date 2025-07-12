@@ -116,7 +116,7 @@ class JarvisLayout(BoxLayout):
 
         try:
             palabra = r.recognize_google(audio_secreto, language="es-MX").lower().strip()
-            if "acceso maestro" in palabra:
+            if "luz" in palabra:
                 self.ids.output.text += "\nJARVIS: Acceso maestro concedido. ¿A qué perfil deseas acceder?"
                 self.reproducir_audio("Acceso maestro concedido. ¿A qué perfil deseas acceder?")
 
@@ -283,6 +283,25 @@ class JarvisLayout(BoxLayout):
             self.ids.output.text += "\nJARVIS: No recuerdo que me hayas dicho nada importante."
             self.reproducir_audio("No recuerdo que me hayas dicho nada importante.")
             return
+        
+        if any(comando.lower().startswith(p) for p in ["qué", "cuánto", "cuál", "cómo", "quién", "dónde", "por qué", "para qué"]):
+            if not any(esp in comando for esp in [
+                "qué canción", "cuál canción", "cómo se llama esta canción",
+                "qué puse", "qué canción puse", "qué música"
+            ]):
+                if len(comando.split()) > 3:
+                    estado_actual["ultima_pregunta"] = comando
+
+        if any(frase in comando for frase in [
+            "qué te pregunté", "cuál fue mi última pregunta", "última pregunta", "te dije hace rato una pregunta"
+        ]):
+            if estado_actual.get("ultima_pregunta"):
+                respuesta = f"La última pregunta que me hiciste fue: {estado_actual['ultima_pregunta']}"
+            else:
+                respuesta = "No recuerdo tu última pregunta."
+            self.ids.output.text += f"\nJARVIS: {respuesta}"
+            self.reproducir_audio(respuesta)
+            return
 
 
 
@@ -299,6 +318,9 @@ class JarvisLayout(BoxLayout):
                 "contenido": texto_respuesta,
                 "hora": datetime.now().strftime("%H:%M:%S")
             })
+
+        # Guardar última pregunta importante
+       
 
             try:
                 print("Intentando decodificar:", texto_respuesta)
