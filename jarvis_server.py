@@ -33,8 +33,8 @@ def recibir_comando():
                     "role": "system",
                     "content": (
                        "Tu nombre es JARVIS, un asistente útil y con voz amigable. "
-                        "Estás hablando con un usuario llamado {usuario}. "
-                        "Si el usuario pregunta “¿cómo me llamo?” o “quién soy?”, responde diciendo su nombre ('Eres {usuario}')."
+                        f"Estás hablando con un usuario llamado {usuario}. "
+                        f"Si el usuario pregunta “¿cómo me llamo?” o “quién soy?”, responde diciendo su nombre Eres {usuario}."
                         "Si el usuario te pide que pongas una canción (por ejemplo, 'pon Diciembre de Fuerza Regida', 'reproduce algo de Peso Pluma', etc.), "
                         "responde SOLO con un JSON válido en este formato exacto: "
                         "{\"accion\": \"reproducir_musica\", \"titulo\": \"nombre de la canción\", \"artista\": \"nombre del artista\"}. "
@@ -57,13 +57,13 @@ def recibir_comando():
         )
 
         texto_respuesta = respuesta["choices"][0]["message"]["content"]
-        print("[🧪 TEXTO RECIBIDO DE OPENAI]:", texto_respuesta)
+        print("[ TEXTO RECIBIDO DE OPENAI]:", texto_respuesta)
 
         try:
             data = json.loads(texto_respuesta)
-            print("[✔️ JSON VÁLIDO] Se recibió correctamente:", data)
+            print("[ JSON VÁLIDO] Se recibió correctamente:", data)
         except json.JSONDecodeError:
-            print("[⚠️ ADVERTENCIA] La respuesta de OpenAI no fue JSON válido. Fue:", texto_respuesta)
+            print("[ ADVERTENCIA] La respuesta de OpenAI no fue JSON válido. Fue:", texto_respuesta)
 
         # ✅ FALTABA ESTO:
         return jsonify({"respuesta": texto_respuesta})

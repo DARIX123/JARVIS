@@ -18,6 +18,10 @@ import librosa
 import encoder
 import time
 import numpy as np
+import sys
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf-8')
+
 
 global estado_actual
 
@@ -103,13 +107,57 @@ class JarvisLayout(BoxLayout):
             self.ids.output.text += f"\n[ERROR] Falló la identificación: {e}"
             self.reproducir_audio("Hubo un error reconociendo tu voz. Intenta más tarde.")
             return
+        
+        self.ids.output.text += "\nJARVIS: No te reconozco. ¿Tienes una palabra secreta?"
+        self.reproducir_audio("No te reconozco. ¿Tienes una palabra secreta?")
+
+        with sr.Microphone() as source:
+            audio_secreto = r.listen(source)
+
+        try:
+            palabra = r.recognize_google(audio_secreto, language="es-MX").lower().strip()
+            if "acceso maestro" in palabra:
+                self.ids.output.text += "\nJARVIS: Acceso maestro concedido. ¿A qué perfil deseas acceder?"
+                self.reproducir_audio("Acceso maestro concedido. ¿A qué perfil deseas acceder?")
+
+                with sr.Microphone() as source:
+                    audio_nombre = r.listen(source)
+
+                nombre = r.recognize_google(audio_nombre, language="es-MX").lower().strip()
+                nombre = nombre.split()[0]
+                ruta_perfil = os.path.join("Desktop","JARVIS","usuarios", f"{nombre}.npy")
+                if os.path.exists(ruta_perfil):
+                    try:
+                        embed = np.load(ruta_perfil)
+                        perfil_activo["usuario"] = nombre
+                        perfil_activo["inicio"] = datetime.now()
+                        print(perfil_activo)
+        # Opcional: podrías guardar el embedding si lo necesitas más adelante
+                        mensaje = f"Bienvenido {nombre}. Ya puedes hablar conmigo normalmente."
+                        self.ids.output.text += f"\nJARVIS: {mensaje}"
+                        self.reproducir_audio(mensaje)
+                        return
+                    except Exception as e:
+                        self.ids.output.text += f"\nJARVIS: Error al cargar el perfil {nombre}: {e}"
+                        self.reproducir_audio("Hubo un error al cargar tu perfil.")
+                        return
+
+                
+              
+            else:
+                self.ids.output.text += "\nJARVIS: Palabra secreta incorrecta."
+                self.reproducir_audio("Palabra secreta incorrecta.")
+                return
+
+        except:
+            self.ids.output.text += "\nJARVIS: No entendí la palabra. Intenta otra vez."
+            self.reproducir_audio("No entendí la palabra. Intenta otra vez.")
 
         self.ids.output.text += "\nJARVIS: No te reconozco. ¿Cómo te llamas?"
         self.reproducir_audio("No te reconozco. ¿Cómo te llamas?")
 
-        with sr.Microphone() as source:
-            nombre_audio = r.listen(source)
-
+        nombre_audio = r.listen(source)
+    
         try:
             nombre = r.recognize_google(nombre_audio, language="es-MX").lower().strip()
             for frase in ["hola", "me llamo", "soy", "mi nombre es", "el nombre es"]:
@@ -120,7 +168,7 @@ class JarvisLayout(BoxLayout):
 
             wav, _ = librosa.load(tmp_audio.name, sr=16000)
             embed = encoder.embed_utterance(wav)
-            np.save(f"perfiles/{nombre}.npy", embed)
+            np.save(f"usuarios/{nombre}.npy", embed)
 
             perfil_activo["usuario"] = nombre
             perfil_activo["inicio"] = datetime.now()
@@ -244,7 +292,7 @@ class JarvisLayout(BoxLayout):
             respuesta = requests.post("http://127.0.0.1:5000/comando", json={"mensaje": comando,
                                                                              "usuario": perfil_activo["usuario"]})
             texto_respuesta = respuesta.json()["respuesta"]
-            print("[📥 TEXTO RECIBIDO DEL SERVIDOR]:", texto_respuesta)
+            print("[ TEXTO RECIBIDO DEL SERVIDOR]:", texto_respuesta)
 
             conversacion.append({
                 "rol": "jarvis",
@@ -322,6 +370,8 @@ class JarvisLayout(BoxLayout):
 
         pygame.mixer.quit()
         os.remove(ruta_archivo)
+
+
 
 class JarvisApp(App):
     def build(self):
