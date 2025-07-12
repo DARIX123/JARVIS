@@ -11,10 +11,10 @@ UMBRAL_SIMILITUD = 0.75  # puedes ajustar este valor
 # Inicializar Flask
 app = Flask(__name__)
 
-modelo_path = os.path.join(os.getcwd(),"Desktop","JARVIS", "encoder_model", "encoder.pt")
+modelo_path = os.path.join(os.getcwd(), "encoder_model", "encoder.pt")
 encoder.load_model(modelo_path)
 
-perfiles_dir = os.path.join(os.getcwd(),"Desktop","JARVIS", "usuarios")
+perfiles_dir = os.path.join(os.getcwd(), "usuarios")
 
 # Función para preprocesar el audio y obtener el embedding
 def obtener_embedding(audio_path):
