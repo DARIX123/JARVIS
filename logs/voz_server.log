@@ -1,0 +1,9 @@
+Loaded encoder "encoder.pt" trained to step 1564501
+ * Serving Flask app 'voz_server'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.181.112:5001
+Press CTRL+C to quit
+127.0.0.1 - - [12/Jul/2025 18:54:35] "POST /reconocer_voz HTTP/1.1" 200 -

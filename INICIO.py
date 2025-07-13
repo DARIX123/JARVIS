@@ -3,28 +3,32 @@ import time
 import os
 import sys
 
-# Ruta base relativa donde están los scripts
+# Ruta base
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Lista de scripts a ejecutar
+# Scripts a ejecutar
 scripts = [
     "jarvis_server.py",
     "voz_server.py",
     "spotify_server.py",
-    # "boss_server.py",  # ← Descomenta si tienes este script
-    "main.py"  # Al final, lanza la interfaz gráfica
+    "main.py"
 ]
 
-# Ejecutar cada script
+
+
+# Limpiar logs anteriores (opcional)
+
+# Ejecutar scripts en segundo plano (excepto main.py)
 procesos = []
-for script in scripts[:-1]:  # Ejecuta todos MENOS el último (main.py)
+for script in scripts[:-1]:
     ruta = os.path.join(BASE_DIR, script)
     print(f"Iniciando: {script}")
-    p = subprocess.Popen([sys.executable, ruta], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    p = subprocess.Popen([sys.executable, ruta])
     procesos.append(p)
-    time.sleep(1.5)  # Espera para evitar conflictos al abrir puertos
 
-# Ejecuta el último script en modo bloqueante (ej. main.py)
+    time.sleep(1.5)
+
+# Ejecutar el script principal (main.py) de forma bloqueante
 ruta_main = os.path.join(BASE_DIR, scripts[-1])
 print(f"Iniciando interfaz gráfica: {scripts[-1]}")
 subprocess.call([sys.executable, ruta_main])
