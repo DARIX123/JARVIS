@@ -23,19 +23,15 @@ import io
 sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf-8')
 
 
-global estado_actual
 
 
 
-perfil_activo = {"usuario": None, "inicio": None}
 microfono_activo = False
 should_record = False
 recording_frames = []
-conversacion = []
 
-estado_actual = {
-    "ultima_cancion": None
-}
+memoria_usuarios = {}
+perfil_activo = {"usuario": None, "inicio": None}
 
 
 # Constantes de audio
@@ -97,6 +93,14 @@ class JarvisLayout(BoxLayout):
             if usuario and usuario != "desconocido":
                 perfil_activo["usuario"] = usuario
                 perfil_activo["inicio"] = datetime.now()
+                if usuario not in memoria_usuarios:
+                    memoria_usuarios[usuario] = {
+                        "estado_actual": {
+                            "ultima_cancion": None,
+                            "ultima_pregunta": None
+                        },
+                        "conversacion": []
+                    }
                 if mostrar_bienvenida:
                     mensaje = f"Hola {usuario}, bienvenido. Puedes pedirme lo que quieras."
                     self.ids.output.text += f"\nJARVIS: {mensaje}"
@@ -117,30 +121,53 @@ class JarvisLayout(BoxLayout):
         try:
             palabra = r.recognize_google(audio_secreto, language="es-MX").lower().strip()
             if "luz" in palabra:
-                self.ids.output.text += "\nJARVIS: Acceso maestro concedido. ¿A qué perfil deseas acceder?"
-                self.reproducir_audio("Acceso maestro concedido. ¿A qué perfil deseas acceder?")
+                self.ids.output.text += "\nJARVIS: Acceso concedido. ¿A qué perfil deseas acceder?"
+                self.reproducir_audio("Acceso concedido. ¿A qué perfil deseas acceder?")
 
                 with sr.Microphone() as source:
                     audio_nombre = r.listen(source)
 
                 nombre = r.recognize_google(audio_nombre, language="es-MX").lower().strip()
                 nombre = nombre.split()[0]
-                ruta_perfil = os.path.join("Desktop","JARVIS","usuarios", f"{nombre}.npy")
+                BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+                ruta_perfil = os.path.join(BASE_DIR, "usuarios", f"{nombre}.npy")
+
+                print("[DEBUG] Ruta completa del perfil:", ruta_perfil)
+                print("[DEBUG] ¿Existe el archivo?:", os.path.exists(ruta_perfil))
+
                 if os.path.exists(ruta_perfil):
                     try:
                         embed = np.load(ruta_perfil)
-                        perfil_activo["usuario"] = nombre
+                        usuario = nombre
+                        perfil_activo["usuario"] = usuario
                         perfil_activo["inicio"] = datetime.now()
                         print(perfil_activo)
+                        if nombre not in memoria_usuarios:
+                            memoria_usuarios[usuario] = {
+                                "estado_actual": {
+                                    "ultima_cancion": None,
+                                    "ultima_pregunta": None
+                                },
+                                "conversacion": []
+                            }
         # Opcional: podrías guardar el embedding si lo necesitas más adelante
                         mensaje = f"Bienvenido {nombre}. Ya puedes hablar conmigo normalmente."
                         self.ids.output.text += f"\nJARVIS: {mensaje}"
                         self.reproducir_audio(mensaje)
+                        if usuario not in memoria_usuarios:
+                            memoria_usuarios[usuario] = {
+                            "estado_actual": {
+                            "ultima_cancion": None,
+                            "ultima_pregunta": None
+                            },
+                            "conversacion": []
+                            }
                         return
                     except Exception as e:
                         self.ids.output.text += f"\nJARVIS: Error al cargar el perfil {nombre}: {e}"
                         self.reproducir_audio("Hubo un error al cargar tu perfil.")
                         return
+         
 
                 
               
@@ -153,33 +180,15 @@ class JarvisLayout(BoxLayout):
             self.ids.output.text += "\nJARVIS: No entendí la palabra. Intenta otra vez."
             self.reproducir_audio("No entendí la palabra. Intenta otra vez.")
 
-        self.ids.output.text += "\nJARVIS: No te reconozco. ¿Cómo te llamas?"
-        self.reproducir_audio("No te reconozco. ¿Cómo te llamas?")
+            
 
-        nombre_audio = r.listen(source)
+
+        self.ids.output.text += "\nJARVIS: No puedo reconocerte ni tienes acceso. Intenta más tarde."
+        self.reproducir_audio("No puedo reconocerte ni tienes acceso. Intenta más tarde.")
+        return
+
+
     
-        try:
-            nombre = r.recognize_google(nombre_audio, language="es-MX").lower().strip()
-            for frase in ["hola", "me llamo", "soy", "mi nombre es", "el nombre es"]:
-                if frase in nombre:
-                    nombre = nombre.replace(frase, "").strip()
-            nombre = nombre.split()[0]
-            self.ids.output.text += f"\nTú: {nombre}"
-
-            wav, _ = librosa.load(tmp_audio.name, sr=16000)
-            embed = encoder.embed_utterance(wav)
-            np.save(f"usuarios/{nombre}.npy", embed)
-
-            perfil_activo["usuario"] = nombre
-            perfil_activo["inicio"] = datetime.now()
-
-            mensaje = f"Te he registrado como {nombre}. Puedes seguir hablándome."
-            self.ids.output.text += f"\nJARVIS: {mensaje}"
-            self.reproducir_audio(mensaje)
-
-        except:
-            self.ids.output.text += "\nJARVIS: No entendí tu nombre. Intenta otra vez."
-            self.reproducir_audio("No entendí tu nombre. Intenta otra vez.")
 
     def on_key_down(self, window, key, scancode, codepoint, modifiers):
         global microfono_activo, should_record, recording_frames
@@ -229,11 +238,14 @@ class JarvisLayout(BoxLayout):
             self.ids.output.text = f"Error: {e}"
 
     def ejecutar_comando(self, comando):
-        conversacion.append({
+        usuario = perfil_activo["usuario"]
+        if not any(comando.lower().startswith(p) for p in ["que", "como", "cual", "quien", "donde", "por que", "para que"]):
+            memoria_usuarios[usuario]["conversacion"].append({
             "rol": perfil_activo["usuario"],
             "contenido": comando,
             "hora": datetime.now().strftime("%H:%M:%S")
-        })
+            })
+
         nombre = perfil_activo["usuario"] if sesion_valida() else None
         if not nombre:
             self.ids.output.text += "\nJARVIS: ¿Quién eres? No te escuché bien."
@@ -259,8 +271,9 @@ class JarvisLayout(BoxLayout):
             "cuál era la canción", "qué puse", "qué canción puse"
         ]):
 
-            if estado_actual["ultima_cancion"]:
-                respuesta = f"La canción actual es: {estado_actual['ultima_cancion']}."
+            if memoria_usuarios[perfil_activo["usuario"]]["estado_actual"]["ultima_cancion"]:
+
+                respuesta = f"La canción actual es:{memoria_usuarios[perfil_activo['usuario']]['estado_actual']['ultima_cancion']}."
             else:
                 respuesta = "No recuerdo que hayas puesto alguna canción."
             self.ids.output.text += f"\nJARVIS: {respuesta}"
@@ -269,7 +282,7 @@ class JarvisLayout(BoxLayout):
 
         
         if "qué te dije hace rato" in comando or "qué te conté" in comando or "qué te dije" in comando:
-            for mensaje in reversed(conversacion):
+            for mensaje in reversed(memoria_usuarios[perfil_activo["usuario"]]["conversacion"]):
                 if (
                     mensaje["rol"] == perfil_activo["usuario"]
                     and not mensaje["contenido"].startswith(("cómo", "qué", "quién", "enciende", "apaga", "reproduce", "pausa", "siguiente"))
@@ -290,15 +303,23 @@ class JarvisLayout(BoxLayout):
                 "qué puse", "qué canción puse", "qué música"
             ]):
                 if len(comando.split()) > 3:
-                    estado_actual["ultima_pregunta"] = comando
+                    usuario = perfil_activo.get("usuario")
+                    if usuario and usuario in memoria_usuarios:
+                        memoria_usuarios[usuario]["estado_actual"]["ultima_pregunta"] = comando
 
         if any(frase in comando for frase in [
             "qué te pregunté", "cuál fue mi última pregunta", "última pregunta", "te dije hace rato una pregunta"
         ]):
-            if estado_actual.get("ultima_pregunta"):
-                respuesta = f"La última pregunta que me hiciste fue: {estado_actual['ultima_pregunta']}"
+            usuario = perfil_activo.get("usuario")
+            if usuario and usuario in memoria_usuarios:
+
+                ultima = memoria_usuarios[usuario]["estado_actual"].get("ultima_pregunta")
+                if ultima:
+                    respuesta = f"La ultima pregunta que me hiciste fue: {ultima}"
+                else:
+                    respuesta = "No recuerdo la ultima pregunta"
             else:
-                respuesta = "No recuerdo tu última pregunta."
+                respuesta = "No se quien eres, no puedo acceder a tu historial"
             self.ids.output.text += f"\nJARVIS: {respuesta}"
             self.reproducir_audio(respuesta)
             return
@@ -313,12 +334,13 @@ class JarvisLayout(BoxLayout):
             texto_respuesta = respuesta.json()["respuesta"]
             print("[ TEXTO RECIBIDO DEL SERVIDOR]:", texto_respuesta)
 
-            conversacion.append({
+            usuario = perfil_activo.get("usuario")
+            if usuario and usuario in memoria_usuarios:
+                memoria_usuarios[usuario]["conversacion"].append({
                 "rol": "jarvis",
                 "contenido": texto_respuesta,
                 "hora": datetime.now().strftime("%H:%M:%S")
-            })
-
+                })
         # Guardar última pregunta importante
        
 
@@ -328,7 +350,10 @@ class JarvisLayout(BoxLayout):
                 if isinstance(data, dict) and data.get("accion") == "reproducir_musica":
                     titulo = data.get("titulo", "")
                     artista = data.get("artista", "")
-                    estado_actual["ultima_cancion"] = f"{titulo} de {artista if artista else 'desconocido'}"
+                    usuario = perfil_activo.get("usuario")
+                    if usuario and usuario in memoria_usuarios:
+                        memoria_usuarios[usuario]["estado_actual"]["ultima_cancion"] = f"{titulo} de {artista if artista else 'desconocido'}"
+
                     if not titulo:
                         texto_respuesta = "¿Cómo se llama la canción que quieres escuchar?"
                     else:
