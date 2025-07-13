@@ -1,40 +1,95 @@
-<JarvisLayout>:
-    orientation: "vertical"
-    padding: 20
-    spacing: 20
+#:import dp kivy.metrics.dp
+
+<ChatBubble>:
+    size_hint_y: None
+    padding: dp(10)
+    text_size: self.width - dp(20), None
+    halign: 'left'
+    valign: 'middle'
+    markup: True
     canvas.before:
         Color:
-            rgba: 0.1, 0.1, 0.15, 1  # Fondo azul oscuro
+            rgba: self.bg_color
+        RoundedRectangle:
+            size: self.size
+            pos: self.pos
+            radius: [dp(10),]
+
+<WaveIndicator>:
+    canvas:
+        Color:
+            rgba: 0, 1, 1, 0.5
+        Rectangle:
+            pos: self.pos
+            size: self.width * self.current_level, self.height
+
+<JarvisLayout>:
+    orientation: 'vertical'
+    # enlaza con las propiedades de Python
+    bg_color: root.bg_color
+    fg_color: root.fg_color
+
+    canvas.before:
+        Color:
+            rgba: root.bg_color
         Rectangle:
             pos: self.pos
             size: self.size
 
-    Label:
-        text: "🔷 Bienvenido a JARVIS"
-        font_size: 28
-        bold: True
-        color: 0.3, 0.8, 1, 1  # Azul brillante
+    # ── Cabecera ─────────────────────────────────────────────────────────────
+    BoxLayout:
         size_hint_y: None
-        height: "40dp"
-        halign: "center"
-        valign: "middle"
-        text_size: self.size
+        height: dp(40)
+        padding: dp(10), 0
 
-    Button:
-        text: "🎙️ Hablar con JARVIS"
+        Label:
+            text: '[b]🔷 JARVIS[/b]'
+            markup: True
+            color: root.fg_color
+            halign: 'left'
+            valign: 'middle'
+            text_size: self.size
+
+        Button:
+            text: '🌙'
+            size_hint_x: None
+            width: dp(40)
+            on_release: root.toggle_theme()
+
+    # ── Historial de chat ────────────────────────────────────────────────────
+    ScrollView:
+        size_hint_y: 0.75
+        do_scroll_x: False
+
+        BoxLayout:
+            id: chat_box
+            orientation: 'vertical'
+            size_hint_y: None
+            height: self.minimum_height
+            spacing: dp(10)
+            padding: dp(10)
+
+    # ── Indicador de nivel de voz ────────────────────────────────────────────
+    WaveIndicator:
         size_hint_y: None
-        height: "50dp"
-        font_size: 20
-        background_color: 0, 0.5, 1, 1
-        color: 1, 1, 1, 1
-        on_release: root.hablar_con_jarvis()
+        height: dp(10)
+        current_level: root.current_level
 
-    Label:
-        id: output
-        text: "Esperando comandos..."
-        font_size: 18
-        color: 1, 1, 1, 1
-        halign: "left"
-        valign: "top"
-        text_size: self.size
+    # ── Zona de entrada fija ────────────────────────────────────────────────
+    BoxLayout:
+        size_hint_y: None
+        height: dp(50)
+        spacing: dp(10)
+        padding: dp(10), 0
 
+        TextInput:
+            id: entrada_usuario
+            hint_text: 'Escribe tu comando...'
+            multiline: False
+            on_text_validate: root.enviar_texto()
+
+        Button:
+            text: '🎙️'
+            size_hint_x: None
+            width: dp(50)
+            on_release: root.hablar_con_jarvis()

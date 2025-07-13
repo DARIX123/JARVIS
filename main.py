@@ -1,142 +1,137 @@
-import speech_recognition as sr
-import requests
-from kivy.app import App
-from kivy.uix.boxlayout import BoxLayout
-from gtts import gTTS
 import os
 import uuid
 import threading
-from datetime import datetime, timedelta
-import soundfile as sf
 import tempfile
-import pygame
-import json
-from kivy.core.window import Window
-import pyaudio
 import wave
+import time
+import audioop
+import json
+
+import speech_recognition as sr
+import requests
+from gtts import gTTS
+import pygame
 import librosa
 import encoder
-import time
 import numpy as np
+import pyaudio
 
-global estado_actual
-# ... (todas tus importaciones, igual que ya tienes)
+from datetime import datetime
+from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label                  # ← para ChatBubble
+from kivy.uix.widget import Widget                # ← para WaveIndicator
+from kivy.clock import Clock
+from kivy.properties import ListProperty, NumericProperty
+from kivy.factory import Factory
+from kivy.metrics import dp
+from kivy.core.window import Window
 
-# Variables globales
-perfil_activo = {"usuario": None, "inicio": None}
+# ── Variables globales ───────────────────────────────────────────────────────
+perfil_activo    = {"usuario": None, "inicio": None}
 microfono_activo = False
-should_record = False
+should_record    = False
 recording_frames = []
-conversacion = []
-
-estado_actual = {
-    "ultima_cancion": None
-}
-
+conversacion     = []
+estado_actual    = {"ultima_cancion": None}
 
 # Constantes de audio
-RATE = 16000
-CHUNK = 1024
-FORMAT = pyaudio.paInt16
-CHANNELS = 1
+RATE, CHUNK = 16000, 1024
+FORMAT      = pyaudio.paInt16
+CHANNELS    = 1
 
-# Función para guardar usuario nuevo
-def guardar_nuevo_usuario(audio_bytes, nombre):
-    from pathlib import Path
-    carpeta = os.path.join("usuarios_nuevos")
-    Path(carpeta).mkdir(parents=True, exist_ok=True)
-    ruta_audio = os.path.join(carpeta, f"{nombre}_{uuid.uuid4().hex}.wav")
-    with wave.open(ruta_audio, 'wb') as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(16000)
-        wf.writeframes(audio_bytes)
-    ruta_txt = os.path.join(carpeta, f"{nombre}.txt")
-    if not os.path.exists(ruta_txt):
-        with open(ruta_txt, "w", encoding="utf-8") as f:
-            f.write("# Frases del usuario\n")
-    return ruta_audio
-
-# Verifica si sesión sigue activa
+# ── Helpers ───────────────────────────────────────────────────────────────────
 def sesion_valida():
     if perfil_activo["usuario"] and perfil_activo["inicio"]:
-        return datetime.now() - perfil_activo["inicio"] < timedelta(minutes=5)
+        return (datetime.now() - perfil_activo["inicio"]).total_seconds() < 300
     return False
 
+def guardar_nuevo_usuario(audio_bytes, nombre):
+    carpeta = os.path.join("usuarios_nuevos")
+    os.makedirs(carpeta, exist_ok=True)
+    ruta = os.path.join(carpeta, f"{nombre}_{uuid.uuid4().hex}.wav")
+    with wave.open(ruta, 'wb') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(RATE)
+        wf.writeframes(audio_bytes)
+    return ruta
+
+# ── Widgets personalizados ───────────────────────────────────────────────────
+class ChatBubble(Label):
+    bg_color = ListProperty([0.1, 0.2, 0.3, 0.8])
+
+class WaveIndicator(Widget):
+    current_level = NumericProperty(0)
+
+# ── Layout principal ─────────────────────────────────────────────────────────
 class JarvisLayout(BoxLayout):
+    # propiedades enlazadas con el KV
+    bg_color      = ListProperty([0.1, 0.1, 0.15, 1])
+    fg_color      = ListProperty([0.3, 0.8, 1, 1])
+    current_level = NumericProperty(0)
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         Window.bind(on_key_down=self.on_key_down, on_key_up=self.on_key_up)
-        threading.Thread(target=self.saludo_inicial).start()
+        Clock.schedule_interval(self.actualizar_fecha_hora, 1)
+        Clock.schedule_once(self.saludo_inicial, 1)
 
-    def saludo_inicial(self):
-        saludo = "Hola, ¿quién eres? ¿En qué puedo ayudarte?"
-        self.ids.output.text = "JARVIS: " + saludo
-        self.reproducir_audio(saludo)
-        self.identificar_usuario(mostrar_bienvenida=True)
+    # ── Funciones de UI ──────────────────────────────────────────────────────
+    def add_bubble(self, user, text, is_jarvis):
+        Bubble = Factory.ChatBubble
+        bubble = Bubble(
+            text=f"[b]{user}:[/b] {text}",
+            markup=True,
+            size_hint_y=None,
+            bg_color=self.fg_color if is_jarvis else [0.2,0.2,0.2,0.8]
+        )
+        bubble.bind(texture_size=lambda inst, size: setattr(inst, 'height', size[1] + dp(20)))
+        self.ids.chat_box.add_widget(bubble)
+        self.ids.chat_box.parent.scroll_y = 0
+
+    def actualizar_fecha_hora(self, dt):
+        if "fecha_hora" in self.ids:
+            ahora = datetime.now().strftime("%A %d/%m/%Y %H:%M:%S")
+            self.ids.fecha_hora.text = ahora
+
+    # ── Saludo e identificación ───────────────────────────────────────────────
+    def saludo_inicial(self, dt):
+        self.add_bubble("JARVIS", "Hola, ¿quién eres? ¿En qué puedo ayudarte?", True)
+        self.reproducir_audio("Hola, ¿quién eres? ¿En qué puedo ayudarte?")
+        threading.Thread(target=self.identificar_usuario, args=(True,), daemon=True).start()
 
     def identificar_usuario(self, mostrar_bienvenida=True):
         r = sr.Recognizer()
         with sr.Microphone() as source:
             audio = r.listen(source)
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_audio:
-            with open(tmp_audio.name, 'wb') as f:
-                f.write(audio.get_wav_data())
-
+        wav_bytes = audio.get_wav_data()
+        ruta = guardar_nuevo_usuario(wav_bytes, "temp")
         try:
-            with open(tmp_audio.name, 'rb') as f_audio:
-                respuesta = requests.post("http://127.0.0.1:5001/reconocer_voz", files={"audio": f_audio})
-                resultado = respuesta.json()
-
-            usuario = resultado.get("usuario")
+            with open(ruta, 'rb') as f:
+                resp = requests.post("http://127.0.0.1:5001/reconocer_voz", files={"audio": f})
+            usuario = resp.json().get("usuario")
             if usuario and usuario != "desconocido":
                 perfil_activo["usuario"] = usuario
                 perfil_activo["inicio"] = datetime.now()
                 if mostrar_bienvenida:
-                    mensaje = f"Hola {usuario}, bienvenido. Puedes pedirme lo que quieras."
-                    self.ids.output.text += f"\nJARVIS: {mensaje}"
-                    self.reproducir_audio(mensaje)
+                    msg = f"Hola {usuario}, bienvenido. ¿En qué puedo ayudarte?"
+                    Clock.schedule_once(lambda dt: self.add_bubble("JARVIS", msg, True), 0)
+                    self.reproducir_audio(msg)
                 return
-
         except Exception as e:
-            self.ids.output.text += f"\n[ERROR] Falló la identificación: {e}"
-            self.reproducir_audio("Hubo un error reconociendo tu voz. Intenta más tarde.")
+            Clock.schedule_once(lambda dt: self.add_bubble("JARVIS", f"Error identificación: {e}", True), 0)
             return
-
-        self.ids.output.text += "\nJARVIS: No te reconozco. ¿Cómo te llamas?"
+        Clock.schedule_once(lambda dt: self.add_bubble("JARVIS", "No te reconozco. ¿Cómo te llamas?", True), 0)
         self.reproducir_audio("No te reconozco. ¿Cómo te llamas?")
 
-        with sr.Microphone() as source:
-            nombre_audio = r.listen(source)
-
-        try:
-            nombre = r.recognize_google(nombre_audio, language="es-MX").lower().strip()
-            self.ids.output.text += f"\nTú: {nombre}"
-
-            wav, _ = librosa.load(tmp_audio.name, sr=16000)
-            embed = encoder.embed_utterance(wav)
-            np.save(f"perfiles/{nombre}.npy", embed)
-
-            perfil_activo["usuario"] = nombre
-            perfil_activo["inicio"] = datetime.now()
-
-            mensaje = f"Te he registrado como {nombre}. Puedes seguir hablándome."
-            self.ids.output.text += f"\nJARVIS: {mensaje}"
-            self.reproducir_audio(mensaje)
-
-        except:
-            self.ids.output.text += "\nJARVIS: No entendí tu nombre. Intenta otra vez."
-            self.reproducir_audio("No entendí tu nombre. Intenta otra vez.")
-
+    # ── Control por tecla ─────────────────────────────────────────────────────
     def on_key_down(self, window, key, scancode, codepoint, modifiers):
-        global microfono_activo, should_record, recording_frames
+        global microfono_activo, should_record
         if key == 32 and not microfono_activo:
             microfono_activo = True
             should_record = True
-            recording_frames = []
-            threading.Thread(target=self.grabar_audio).start()
-            self.ids.output.text = "Escuchando..."
+            threading.Thread(target=self.grabar_audio, daemon=True).start()
 
     def on_key_up(self, window, key, *args):
         global microfono_activo, should_record
@@ -144,176 +139,89 @@ class JarvisLayout(BoxLayout):
             should_record = False
             microfono_activo = False
 
+    # ── Grabación y procesado ─────────────────────────────────────────────────
     def grabar_audio(self):
         global recording_frames
         p = pyaudio.PyAudio()
         stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+        frames = []
         while should_record:
             data = stream.read(CHUNK)
-            recording_frames.append(data)
+            frames.append(data)
+            nivel = audioop.rms(data, 2) / 10000.0
+            self.current_level = min(1, max(0, nivel))
         stream.stop_stream()
         stream.close()
         p.terminate()
-        self.procesar_audio(recording_frames)
+        self.procesar_audio(frames)
 
     def procesar_audio(self, frames):
-        audio_path = os.path.join(tempfile.gettempdir(), f"audio_{uuid.uuid4().hex}.wav")
-        p = pyaudio.PyAudio()
-        with wave.open(audio_path, 'wb') as wf:
+        ruta = os.path.join(tempfile.gettempdir(), f"audio_{uuid.uuid4().hex}.wav")
+        with wave.open(ruta, 'wb') as wf:
             wf.setnchannels(CHANNELS)
-            wf.setsampwidth(p.get_sample_size(FORMAT))
+            wf.setsampwidth(pyaudio.PyAudio().get_sample_size(FORMAT))
             wf.setframerate(RATE)
             wf.writeframes(b''.join(frames))
-
         r = sr.Recognizer()
-        with sr.AudioFile(audio_path) as source:
+        with sr.AudioFile(ruta) as source:
             audio = r.record(source)
-
         try:
             comando = r.recognize_google(audio, language="es-MX")
-            self.ids.output.text = f"Tú: {comando}"
+            Clock.schedule_once(lambda dt: self.add_bubble("Tú", comando, False), 0)
             self.ejecutar_comando(comando.lower())
         except Exception as e:
-            self.ids.output.text = f"Error: {e}"
+            Clock.schedule_once(lambda dt: self.add_bubble("JARVIS", f"Error: {e}", True), 0)
 
+    # ── Ejecución de comandos ─────────────────────────────────────────────────
     def ejecutar_comando(self, comando):
-        conversacion.append({
-            "rol": perfil_activo["usuario"],
-            "contenido": comando,
-            "hora": datetime.now().strftime("%H:%M:%S")
-        })
-        nombre = perfil_activo["usuario"] if sesion_valida() else None
-        if not nombre:
-            self.ids.output.text += "\nJARVIS: ¿Quién eres? No te escuché bien."
-            self.reproducir_audio("¿Quién eres? No te escuché bien.")
+        if not sesion_valida():
             self.identificar_usuario()
             return
+        # ... aquí tu lógica de API de ChatGPT u otros comandos ...
+        respuesta = f"He recibido: '{comando}'"
+        Clock.schedule_once(lambda dt: self.add_bubble("JARVIS", respuesta, True), 0)
+        self.reproducir_audio(respuesta)
 
-        if "cómo me llamo" in comando:
-            self.ids.output.text += "\nHaber habla un segundo, para ver quien eres jeje..."
-            self.reproducir_audio("Haber habla un segundo, para ver quien eres jeje...")
-            self.identificar_usuario(mostrar_bienvenida=False)
-            if perfil_activo["usuario"]:
-                mensaje = f"Claro, conozco tu nombre. Eres {perfil_activo['usuario']}. ¿En qué más puedo ayudarte?"
-            else:
-                mensaje = "Lo siento, no logré reconocerte."
-            self.ids.output.text += f"\nJARVIS: {mensaje}"
-            self.reproducir_audio(mensaje)
-            return
-        
-        if "qué canción" in comando or "qué música" in comando or "cuál canción" in comando:
-            if estado_actual["ultima_cancion"]:
-                respuesta = f"La canción actual es: {estado_actual['ultima_cancion']}."
-            else:
-                respuesta = "No recuerdo que hayas puesto alguna canción."
-                self.ids.output.text += f"\nJARVIS: {respuesta}"
-                self.reproducir_audio(respuesta)
-                return
+    # ── Entrada manual ────────────────────────────────────────────────────────
+    def enviar_texto(self):
+        texto = self.ids.entrada_usuario.text.strip()
+        if texto:
+            self.add_bubble("Tú", texto, False)
+            self.ids.entrada_usuario.text = ""
+            self.ejecutar_comando(texto.lower())
 
-        
-        if "qué te dije hace rato" in comando or "qué te conté" in comando or "qué te dije" in comando:
-            for mensaje in reversed(conversacion):
-                if (
-                    mensaje["rol"] == perfil_activo["usuario"]
-                    and not mensaje["contenido"].startswith(("cómo", "qué", "quién", "enciende", "apaga", "reproduce", "pausa", "siguiente"))
-                    and len(mensaje["contenido"].split()) > 3
-                ):
-                    recordatorio = mensaje["contenido"]
-                    respuesta = f"Me dijiste: \"{recordatorio}\""
-                    self.ids.output.text += f"\nJARVIS: {respuesta}"
-                    self.reproducir_audio(respuesta)
-                    return
-            self.ids.output.text += "\nJARVIS: No recuerdo que me hayas dicho nada importante."
-            self.reproducir_audio("No recuerdo que me hayas dicho nada importante.")
-            return
+    # ── Controles UI adicionales ─────────────────────────────────────────────
+    def hablar_con_jarvis(self):
+        self.add_bubble("JARVIS", "Escuchando...", True)
+        Clock.schedule_once(lambda dt: self.reset_estado(), 3)
 
+    def reset_estado(self, dt):
+        self.add_bubble("JARVIS", "Esperando comandos...", True)
 
-
-        # Resto del flujo de comandos normales
-        texto_respuesta = ""
-        try:
-            respuesta = requests.post("http://127.0.0.1:5000/comando", json={"mensaje": comando,
-                                                                             "usuario": perfil_activo["usuario"]})
-            texto_respuesta = respuesta.json()["respuesta"]
-            conversacion.append({
-                "rol": "jarvis",
-                "contenido": texto_respuesta,
-                "hora": datetime.now().strftime("%H:%M:%S")
-            })
-
-            try:
-                data = json.loads(texto_respuesta)
-                print("DATA RECIBIDA", data)
-                if isinstance(data, dict) and data.get("accion") == "reproducir_musica":
-                    titulo = data.get("titulo", "")
-                    artista = data.get("artista", "")
-                    estado_actual["ultima_cancion"] = f"{titulo} de {artista if artista else 'desconocido'}"
-                    if not titulo:
-                        texto_respuesta = "¿Cómo se llama la canción que quieres escuchar?"
-                    else:
-                        try:
-                            time.sleep(1)
-                            requests.post("http://127.0.0.1:5002/reproducir", json={
-                                "titulo": titulo,
-                                "artista": artista
-                            })
-                            texto_respuesta = f"Reproduciendo {titulo} de {artista if artista else 'Spotify'}."
-                        except:
-                            texto_respuesta = "No pude encontrar la canción."
-            except json.JSONDecodeError:
-                pass
-
-            texto_lower = texto_respuesta.lower()
-            if "enciende" in texto_lower and "luz" in texto_lower:
-                texto_respuesta += f"\n(Comando ejecutado: encender luz)"
-            elif "apaga" in texto_lower and "luz" in texto_lower:
-                texto_respuesta += f"\n(Comando ejecutado: apagar luz)"
-            elif "pausa" in texto_lower and "música" in texto_lower:
-                try:
-                    requests.post("http://127.0.0.1:5002/control", json={"accion": "pausar"})
-                except:
-                    texto_respuesta += "\n(No se pudo pausar la música)"
-            elif "reproduce" in texto_lower and "música" in texto_lower:
-                try:
-                    requests.post("http://127.0.0.1:5002/control", json={"accion": "reproducir"})
-                except:
-                    texto_respuesta += "\n(No se pudo reanudar la música)"
-            elif "siguiente" in texto_lower and "canción" in texto_lower:
-                try:
-                    requests.post("http://127.0.0.1:5002/control", json={"accion": "siguiente"})
-                except:
-                    texto_respuesta += "\n(No se pudo cambiar la canción)"
-
-        except requests.exceptions.ConnectionError:
-            texto_respuesta = "No se pudo conectar con el servidor de ChatGPT. Verifica que esté en ejecución."
-
-        self.ids.output.text += f"\nJARVIS: {texto_respuesta}"
-        self.reproducir_audio(texto_respuesta)
+    def toggle_theme(self):
+        if self.bg_color == [0.1, 0.1, 0.15, 1]:
+            self.bg_color = [1, 1, 1, 1]
+            self.fg_color = [0, 0, 0, 1]
+        else:
+            self.bg_color = [0.1, 0.1, 0.15, 1]
+            self.fg_color = [0.3, 0.8, 1, 1]
 
     def reproducir_audio(self, texto):
-        if not texto.strip():
-            self.ids.output.text += "\nError: No hay texto para reproducir."
-            return
-
-        nombre_archivo = f"respuesta_{uuid.uuid4().hex}.mp3"
-        ruta_archivo = os.path.join(os.getcwd(), nombre_archivo)
-
+        nombre = f"tts_{uuid.uuid4().hex}.mp3"
         tts = gTTS(text=texto, lang='es')
-        tts.save(ruta_archivo)
-
+        tts.save(nombre)
         pygame.mixer.init()
-        pygame.mixer.music.load(ruta_archivo)
+        pygame.mixer.music.load(nombre)
         pygame.mixer.music.play()
-
         while pygame.mixer.music.get_busy():
-            continue
-
+            pass
         pygame.mixer.quit()
-        os.remove(ruta_archivo)
+        os.remove(nombre)
 
+# ── App ─────────────────────────────────────────────────────────────────────
 class JarvisApp(App):
     def build(self):
         return JarvisLayout()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     JarvisApp().run()
