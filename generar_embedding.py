@@ -8,8 +8,8 @@ from pathlib import Path
 encoder.load_model("C:/Users/PC RAPTOR/Desktop/JARVIS/encoder_model/encoder.pt")
 
 # Ruta exacta de tus audios
-audio_dir = Path("C:/Users/PC RAPTOR/Downloads/abdiel")
-audio_filenames = [f"abdiel-{i}.wav" for i in range(1, 11)]
+audio_dir = Path("C:/Users/PC RAPTOR/Downloads/uriel")
+audio_filenames = [f"uriel-{i}.wav" for i in range(1, 17)]
 
 # Ruta exacta donde se guardará el archivo final
 directorio_salida = Path("C:/Users/PC RAPTOR/Desktop/JARVIS/usuarios")
@@ -28,6 +28,6 @@ for filename in audio_filenames:
     print(f"✅ Embedding generado para: {filename}")
 
 # Guardar archivo .npy con nombre 'uriel.npy'
-output_file = directorio_salida / "abdiel.npy"
+output_file = directorio_salida / "uriel.npy"
 np.save(output_file, embeddings)
 print(f"✅ Archivo guardado exitosamente en: {output_file}")

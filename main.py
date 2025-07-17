@@ -14,7 +14,6 @@ import pygame
 import librosa
 import encoder
 import numpy as np
-<<<<<<< HEAD
 import pyaudio
 
 from datetime import datetime
@@ -27,10 +26,7 @@ from kivy.properties import ListProperty, NumericProperty
 from kivy.factory import Factory
 from kivy.metrics import dp
 from kivy.core.window import Window
-
-# ── Variables globales ───────────────────────────────────────────────────────
-perfil_activo    = {"usuario": None, "inicio": None}
-=======
+from kivy.clock import mainthread
 import sys
 import io
 sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf-8')
@@ -38,20 +34,13 @@ sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf-8')
 
 
 
-
->>>>>>> 258b7ac0aea909bb7f133cc793a30c7d01eaa939
 microfono_activo = False
 should_record    = False
 recording_frames = []
-<<<<<<< HEAD
-conversacion     = []
-estado_actual    = {"ultima_cancion": None}
-=======
 
 memoria_usuarios = {}
 perfil_activo = {"usuario": None, "inicio": None}
 
->>>>>>> 258b7ac0aea909bb7f133cc793a30c7d01eaa939
 
 # Constantes de audio
 RATE, CHUNK = 16000, 1024
@@ -89,6 +78,10 @@ class JarvisLayout(BoxLayout):
     fg_color      = ListProperty([0.3, 0.8, 1, 1])
     current_level = NumericProperty(0)
 
+    @mainthread
+    def mostrar_burbuja(self, user, text, is_jarvis):
+        self.add_bubble(user, text, is_jarvis)
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         Window.bind(on_key_down=self.on_key_down, on_key_up=self.on_key_up)
@@ -115,13 +108,13 @@ class JarvisLayout(BoxLayout):
 
     # ── Saludo e identificación ───────────────────────────────────────────────
     def saludo_inicial(self, dt):
-        self.add_bubble("JARVIS", "Hola, ¿quién eres? ¿En qué puedo ayudarte?", True)
+        self.mostrar_burbuja("JARVIS", "Hola, ¿quién eres? ¿En qué puedo ayudarte?", True)
         self.reproducir_audio("Hola, ¿quién eres? ¿En qué puedo ayudarte?")
         threading.Thread(target=self.identificar_usuario, args=(True,), daemon=True).start()
 
     def identificar_usuario(self, mostrar_bienvenida=True):
         r = sr.Recognizer()
-        with sr.Microphone() as source:
+        with sr.Microphone(sample_rate=16000) as source:
             audio = r.listen(source)
         wav_bytes = audio.get_wav_data()
         ruta = guardar_nuevo_usuario(wav_bytes, "temp")
@@ -146,16 +139,14 @@ class JarvisLayout(BoxLayout):
                     self.reproducir_audio(msg)
                 return
         except Exception as e:
-            Clock.schedule_once(lambda dt: self.add_bubble("JARVIS", f"Error identificación: {e}", True), 0)
+            # Cerramos 'e' en el parámetro por defecto 'exc' y programamos la burbuja a 0 segundos
+            Clock.schedule_once(
+                lambda dt, exc=e: self.add_bubble("JARVIS", f"Error identificación: {exc}", True),
+                0
+            )
             return
-<<<<<<< HEAD
-        Clock.schedule_once(lambda dt: self.add_bubble("JARVIS", "No te reconozco. ¿Cómo te llamas?", True), 0)
-        self.reproducir_audio("No te reconozco. ¿Cómo te llamas?")
 
-    # ── Control por tecla ─────────────────────────────────────────────────────
-=======
-        
-        self.ids.output.text += "\nJARVIS: No te reconozco. ¿Tienes una palabra secreta?"
+        self.mostrar_burbuja("JARVIS:", "No te reconozco. ¿Tienes una palabra secreta?",True)
         self.reproducir_audio("No te reconozco. ¿Tienes una palabra secreta?")
 
         with sr.Microphone() as source:
@@ -164,7 +155,8 @@ class JarvisLayout(BoxLayout):
         try:
             palabra = r.recognize_google(audio_secreto, language="es-MX").lower().strip()
             if "luz" in palabra:
-                self.ids.output.text += "\nJARVIS: Acceso concedido. ¿A qué perfil deseas acceder?"
+                self.mostrar_burbuja("Tu", palabra, False)
+                self.mostrar_burbuja("JARVIS:", "Acceso concedido. ¿A qué perfil deseas acceder?", True)
                 self.reproducir_audio("Acceso concedido. ¿A qué perfil deseas acceder?")
 
                 with sr.Microphone() as source:
@@ -195,7 +187,7 @@ class JarvisLayout(BoxLayout):
                             }
         # Opcional: podrías guardar el embedding si lo necesitas más adelante
                         mensaje = f"Bienvenido {nombre}. Ya puedes hablar conmigo normalmente."
-                        self.ids.output.text += f"\nJARVIS: {mensaje}"
+                        self.mostrar_burbuja(f"JARVIS:", mensaje , True)
                         self.reproducir_audio(mensaje)
                         if usuario not in memoria_usuarios:
                             memoria_usuarios[usuario] = {
@@ -207,7 +199,7 @@ class JarvisLayout(BoxLayout):
                             }
                         return
                     except Exception as e:
-                        self.ids.output.text += f"\nJARVIS: Error al cargar el perfil {nombre}: {e}"
+                        self.mostrar_burbuja(f"JARVIS:", "Error al cargar el perfil {nombre}: {e}", True)
                         self.reproducir_audio("Hubo un error al cargar tu perfil.")
                         return
          
@@ -215,25 +207,24 @@ class JarvisLayout(BoxLayout):
                 
               
             else:
-                self.ids.output.text += "\nJARVIS: Palabra secreta incorrecta."
+                self.mostrar_burbuja("JARVIS:", "Palabra secreta incorrecta.", True)
                 self.reproducir_audio("Palabra secreta incorrecta.")
                 return
 
         except:
-            self.ids.output.text += "\nJARVIS: No entendí la palabra. Intenta otra vez."
+            self.mostrar_burbuja ("JARVIS:" ,"No entendí la palabra. Intenta otra vez.",True)
             self.reproducir_audio("No entendí la palabra. Intenta otra vez.")
 
             
 
 
-        self.ids.output.text += "\nJARVIS: No puedo reconocerte ni tienes acceso. Intenta más tarde."
+        self.mostrar_burbuja("JARVIS:", "No puedo reconocerte ni tienes acceso. Intenta más tarde.",True)
         self.reproducir_audio("No puedo reconocerte ni tienes acceso. Intenta más tarde.")
         return
 
 
     
 
->>>>>>> 258b7ac0aea909bb7f133cc793a30c7d01eaa939
     def on_key_down(self, window, key, scancode, codepoint, modifiers):
         global microfono_activo, should_record
         if key == 32 and not microfono_activo:
@@ -278,13 +269,14 @@ class JarvisLayout(BoxLayout):
             Clock.schedule_once(lambda dt: self.add_bubble("Tú", comando, False), 0)
             self.ejecutar_comando(comando.lower())
         except Exception as e:
-            Clock.schedule_once(lambda dt: self.add_bubble("JARVIS", f"Error: {e}", True), 0)
-
+            # Cerramos 'e' en el parámetro por defecto 'exc' y programamos la burbuja a 0 segundos
+            Clock.schedule_once(
+                lambda dt, exc=e: self.add_bubble("JARVIS", f"Error identificación: {exc}", True),
+                0
+            )
+            return
     # ── Ejecución de comandos ─────────────────────────────────────────────────
     def ejecutar_comando(self, comando):
-<<<<<<< HEAD
-        if not sesion_valida():
-=======
         usuario = perfil_activo["usuario"]
         if not any(comando.lower().startswith(p) for p in ["que", "como", "cual", "quien", "donde", "por que", "para que"]):
             memoria_usuarios[usuario]["conversacion"].append({
@@ -295,39 +287,20 @@ class JarvisLayout(BoxLayout):
 
         nombre = perfil_activo["usuario"] if sesion_valida() else None
         if not nombre:
-            self.ids.output.text += "\nJARVIS: ¿Quién eres? No te escuché bien."
+            self.mostrar_burbuja("JARVIS:", "¿Quién eres? No te escuché bien.", True)
             self.reproducir_audio("¿Quién eres? No te escuché bien.")
->>>>>>> 258b7ac0aea909bb7f133cc793a30c7d01eaa939
             self.identificar_usuario()
             return
-        # ... aquí tu lógica de API de ChatGPT u otros comandos ...
-        respuesta = f"He recibido: '{comando}'"
-        Clock.schedule_once(lambda dt: self.add_bubble("JARVIS", respuesta, True), 0)
-        self.reproducir_audio(respuesta)
 
-<<<<<<< HEAD
-    # ── Entrada manual ────────────────────────────────────────────────────────
-    def enviar_texto(self):
-        texto = self.ids.entrada_usuario.text.strip()
-        if texto:
-            self.add_bubble("Tú", texto, False)
-            self.ids.entrada_usuario.text = ""
-            self.ejecutar_comando(texto.lower())
-
-    # ── Controles UI adicionales ─────────────────────────────────────────────
-    def hablar_con_jarvis(self):
-        self.add_bubble("JARVIS", "Escuchando...", True)
-        Clock.schedule_once(lambda dt: self.reset_estado(), 3)
-=======
         if "cómo me llamo" in comando:
-            self.ids.output.text += "\nHaber habla un segundo, para ver quien eres jeje..."
+            self.mostrar_burbuja("JARVIS:", "Haber habla un segundo, para ver quien eres jeje...", True)
             self.reproducir_audio("Haber habla un segundo, para ver quien eres jeje...")
             self.identificar_usuario(mostrar_bienvenida=False)
             if perfil_activo["usuario"]:
                 mensaje = f"Claro, conozco tu nombre. Eres {perfil_activo['usuario']}. ¿En qué más puedo ayudarte?"
             else:
                 mensaje = "Lo siento, no logré reconocerte."
-            self.ids.output.text += f"\nJARVIS: {mensaje}"
+            self.mostrar_burbuja(f"JARVIS:", mensaje, True)
             self.reproducir_audio(mensaje)
             return
         
@@ -342,7 +315,7 @@ class JarvisLayout(BoxLayout):
                 respuesta = f"La canción actual es:{memoria_usuarios[perfil_activo['usuario']]['estado_actual']['ultima_cancion']}."
             else:
                 respuesta = "No recuerdo que hayas puesto alguna canción."
-            self.ids.output.text += f"\nJARVIS: {respuesta}"
+            self.mostrar_burbuja(f"JARVIS:", respuesta, True)
             self.reproducir_audio(respuesta)
             return
 
@@ -356,10 +329,10 @@ class JarvisLayout(BoxLayout):
                 ):
                     recordatorio = mensaje["contenido"]
                     respuesta = f"Me dijiste: \"{recordatorio}\""
-                    self.ids.output.text += f"\nJARVIS: {respuesta}"
+                    self.mostrar_burbuja(f"JARVIS:", respuesta, True)
                     self.reproducir_audio(respuesta)
                     return
-            self.ids.output.text += "\nJARVIS: No recuerdo que me hayas dicho nada importante."
+            self.mostrar_burbuja("JARVIS:", "No recuerdo que me hayas dicho nada importante.", True)
             self.reproducir_audio("No recuerdo que me hayas dicho nada importante.")
             return
         
@@ -386,23 +359,11 @@ class JarvisLayout(BoxLayout):
                     respuesta = "No recuerdo la ultima pregunta"
             else:
                 respuesta = "No se quien eres, no puedo acceder a tu historial"
-            self.ids.output.text += f"\nJARVIS: {respuesta}"
+            self.mostrar_burbuja(f"JARVIS:", respuesta, True)
             self.reproducir_audio(respuesta)
             return
->>>>>>> 258b7ac0aea909bb7f133cc793a30c7d01eaa939
 
-    def reset_estado(self, dt):
-        self.add_bubble("JARVIS", "Esperando comandos...", True)
 
-<<<<<<< HEAD
-    def toggle_theme(self):
-        if self.bg_color == [0.1, 0.1, 0.15, 1]:
-            self.bg_color = [1, 1, 1, 1]
-            self.fg_color = [0, 0, 0, 1]
-        else:
-            self.bg_color = [0.1, 0.1, 0.15, 1]
-            self.fg_color = [0.3, 0.8, 1, 1]
-=======
 
         # Resto del flujo de comandos normales
         texto_respuesta = ""
@@ -472,31 +433,35 @@ class JarvisLayout(BoxLayout):
         except requests.exceptions.ConnectionError:
             texto_respuesta = "No se pudo conectar con el servidor de ChatGPT. Verifica que esté en ejecución."
 
-        self.ids.output.text += f"\nJARVIS: {texto_respuesta}"
+        self.mostrar_burbuja(f"JARVIS:", texto_respuesta, True)
         self.reproducir_audio(texto_respuesta)
->>>>>>> 258b7ac0aea909bb7f133cc793a30c7d01eaa939
 
     def reproducir_audio(self, texto):
-        nombre = f"tts_{uuid.uuid4().hex}.mp3"
+        if not texto.strip():
+            self.ids.output.text += "\nError: No hay texto para reproducir."
+            return
+
+        nombre_archivo = f"respuesta_{uuid.uuid4().hex}.mp3"
+        ruta_archivo = os.path.join(os.getcwd(), nombre_archivo)
+
         tts = gTTS(text=texto, lang='es')
-        tts.save(nombre)
+        tts.save(ruta_archivo)
+
         pygame.mixer.init()
-        pygame.mixer.music.load(nombre)
+        pygame.mixer.music.load(ruta_archivo)
         pygame.mixer.music.play()
+
         while pygame.mixer.music.get_busy():
-            pass
-        pygame.mixer.quit()
-        os.remove(nombre)
+            continue
 
-<<<<<<< HEAD
-# ── App ─────────────────────────────────────────────────────────────────────
-=======
+        pygame.mixer.quit()    
+        os.remove(ruta_archivo)
 
 
->>>>>>> 258b7ac0aea909bb7f133cc793a30c7d01eaa939
+
 class JarvisApp(App):
     def build(self):
         return JarvisLayout()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     JarvisApp().run()
